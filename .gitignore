@@ -1,0 +1,8 @@
+.env
+*.env
+data/models/
+data/feedback/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
