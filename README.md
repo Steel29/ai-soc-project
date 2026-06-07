@@ -6,28 +6,31 @@ This project is a fully on-premises AI pipeline for a Security Operations Centre
 
 ## Environments
 
-| Setting | Dev (Windows laptop) | Staging (Linux server) | Production (Linux server + GPU) |
+| Setting | Dev (Windows laptop) | Staging (Linux server) | Production (GPU server) |
 |---|---|---|---|
-| `VLLM_BASE_URL` | `http://localhost:11434/v1` (Ollama) | `http://staging-gpu:8000/v1` (vLLM) | `http://prod-gpu:8000/v1` (vLLM) |
-| `MODEL_NAME` | `llama3.2:8b-instruct-q4_K_M` | `phi-4-triage` | `phi-4-triage` |
-| `REDPANDA_BROKERS` | `redpanda:9092` | `redpanda:9092` | `redpanda:9092` |
-| `OPENSEARCH_HOST` | `http://opensearch:9200` | `http://opensearch:9200` | `http://opensearch:9200` |
+| `VLLM_BASE_URL` | `http://host.docker.internal:11434/v1` | `http://192.168.1.50:11434/v1` | `http://gpu-server-ip:8000/v1` |
+| `MODEL_NAME` | `gemma4` (or `llama3.1:8b`) | `gemma4` | `phi-4-triage` |
+| `OLLAMA_BASE_URL` | `http://host.docker.internal:11434` | `http://192.168.1.50:11434` | *(not used — vLLM serves both)* |
+| `EMBEDDING_MODEL` | `nomic-embed-text` | `nomic-embed-text` | `nomic-embed-text` |
 | Passwords | defaults from `.env.example` | **must be changed** | **must be changed** |
 | `FEEDBACK_UI_PORT` | `8888` | `8888` | `443` (behind reverse proxy) |
 
 All other variables stay the same across environments unless infrastructure hostnames differ.
 
+The rule for switching environments is simple: **only `VLLM_BASE_URL` and `MODEL_NAME` need to change** to point the stack at a different inference backend.
+
 ---
 
-## Running Locally (dev)
+## Running Locally (dev — Windows laptop)
 
-**Prerequisites:** Docker Desktop, Ollama installed and running on the host.
+**Prerequisites:** Docker Desktop with WSL2 backend, Ollama installed and running on Windows.
 
 ```bash
-# 1. Pull the model you'll use
-ollama pull llama3.2:8b-instruct-q4_K_M
+# 1. Pull the models you'll use (run in Windows terminal or WSL2)
+ollama pull gemma4
+ollama pull nomic-embed-text
 
-# 2. Copy the example env file and leave the defaults for local use
+# 2. Copy the example env file — defaults work as-is for dev
 cp .env.example .env
 
 # 3. Start all services
@@ -39,8 +42,8 @@ docker compose -f docker/compose/docker-compose.yml logs -f
 
 The feedback UI will be available at `http://localhost:8888`.
 
-> On Windows, Ollama on the host is reachable from containers via `host.docker.internal`.
-> Update `VLLM_BASE_URL=http://host.docker.internal:11434/v1` in your `.env` if needed.
+> Docker containers reach Ollama on the Windows host via `host.docker.internal:11434`.
+> This is already set as the default in `.env.example`.
 
 ---
 
@@ -57,11 +60,11 @@ ssh user@staging-server
 cd /opt/soc-ai
 git pull origin main
 
-# Update env if any new variables were added
-diff .env .env.example
+# Update env for staging (point at laptop LAN IP for Ollama, change passwords)
+nano .env
 
-# Rebuild and restart changed containers only
+# Rebuild and restart only changed containers
 docker compose -f docker/compose/docker-compose.yml up -d --build
 ```
 
-For production, follow the same steps on the production server and ensure credentials in `.env` are rotated from the defaults. Verify `VLLM_BASE_URL` points to the GPU inference server before restarting.
+For production, follow the same steps on the GPU server and set `VLLM_BASE_URL` to the vLLM endpoint and `MODEL_NAME` to the served model name. Rotate all credentials from the defaults before starting.
